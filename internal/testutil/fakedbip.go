@@ -192,6 +192,7 @@ const DelegatedSample = `2|apnic|20261002|5|19830613|20261001|+1000
 apnic|*|asn|*|1|summary
 apnic|*|ipv4|*|3|summary
 apnic|*|ipv6|*|2|summary
+apnic|CN|asn|3460|1|20020801|allocated|A92E1062
 apnic|CN|ipv4|1.0.1.0|768|20110414|allocated|A92E1062
 apnic|CN|ipv4|36.0.0.0|131072|20100910|allocated|A92E1062
 apnic|HK|ipv4|223.0.0.0|65536|20100910|allocated|A9123

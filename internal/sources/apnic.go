@@ -54,6 +54,9 @@ func ReadDelegated(path, country string) (v4, v6 []iprange.Range, err error) {
 		if status != "allocated" && status != "assigned" {
 			continue
 		}
+		if cols[2] != "ipv4" && cols[2] != "ipv6" { // e.g. asn records
+			continue
+		}
 		start, err := netip.ParseAddr(cols[3])
 		if err != nil {
 			return nil, nil, fmt.Errorf("delegated line %d: %w", line, err)
