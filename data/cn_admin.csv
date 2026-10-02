@@ -1,0 +1,5 @@
+# 中国大陆 31 个省级行政区：中文名 → ISO 3166-2 代码、GeoNames ID、省会坐标。
+# Generated with `egeo gen-cn-admin` from GeoNames (CC BY 4.0), reviewed by hand, then committed.
+# dbip_names: subdivision names used by DB-IP for this province, separated by ';'.
+# radius_km: accuracy radius used when only the province is known.
+iso_code,name_zh,name_en,dbip_names,geoname_id,capital_zh,capital_en,capital_geoname_id,latitude,longitude,radius_km

@@ -1,0 +1,11 @@
+# 确认是任播的网段 / Networks confirmed to be anycast. Data license: CC BY 4.0. Every row needs evidence.
+network,anycast,cdn,operator,evidence
+1.1.1.0/24,true,false,Cloudflare 1.1.1.1,"https://blog.cloudflare.com/cloudflare-1-1-1-1-incident-on-july-14-2025/ (resolver prefixes; 'Almost all of Cloudflare's services are made available to the Internet using ... anycast')"
+1.0.0.0/24,true,false,Cloudflare 1.1.1.1,https://blog.cloudflare.com/cloudflare-1-1-1-1-incident-on-july-14-2025/
+2606:4700:4700::/48,true,false,Cloudflare 1.1.1.1,https://blog.cloudflare.com/cloudflare-1-1-1-1-incident-on-july-14-2025/
+8.8.8.0/24,true,false,Google Public DNS,"https://developers.google.com/speed/public-dns/faq ('Anycast routing directs your queries to the closest Google Public DNS server'; service address 8.8.8.8)"
+8.8.4.0/24,true,false,Google Public DNS,https://developers.google.com/speed/public-dns/faq (service address 8.8.4.4)
+2001:4860:4860::/48,true,false,Google Public DNS,https://developers.google.com/speed/public-dns/faq (service range 2001:4860:4860::)
+9.9.9.0/24,true,false,Quad9,"https://quad9.net/support/faq/ ('Quad9 is a global anycast service'); addresses: https://quad9.net/service/service-addresses-and-features"
+149.112.112.0/24,true,false,Quad9,https://quad9.net/service/service-addresses-and-features (149.112.112.112)
+2620:fe::/48,true,false,Quad9,https://quad9.net/service/service-addresses-and-features (2620:fe::fe / 2620:fe::9)

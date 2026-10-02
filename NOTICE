@@ -1,0 +1,37 @@
+EnhancedGeo (enhanced-geoip)
+Copyright 2026 the enhanced-geoip contributors
+
+The source code in this repository is licensed under the Apache License,
+Version 2.0 (see LICENSE). The databases it builds and the tables in data/
+are licensed under the Creative Commons Attribution 4.0 International
+License (see DATA_LICENSE.md).
+
+The databases contain data from the following sources:
+
+* IP Geolocation by DB-IP (https://db-ip.com)
+  DB-IP IP to City Lite and IP to ASN Lite, licensed under CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/). The data has been merged
+  with the sources below and modified.
+
+* GeoNames (https://www.geonames.org)
+  Place names, identifiers and coordinates in data/cn_admin.csv and
+  data/cn_cities.csv, licensed under CC BY 4.0.
+
+* iptoasn.com by Frank Denis (https://iptoasn.com)
+  IP to ASN data, Open Data Commons Public Domain Dedication and License
+  (PDDL) 1.0.
+
+* Network lists published by Amazon Web Services, Google Cloud, Microsoft
+  Azure, Oracle Cloud Infrastructure, Cloudflare and Fastly. These lists do
+  not state a license; they are used as factual references to flag CDN,
+  anycast and cloud networks.
+
+Web applications that display or use lookup results must include the link
+<a href='https://db-ip.com'>IP Geolocation by DB-IP</a> on those pages.
+
+Third-party Go modules used by the builder:
+
+* github.com/maxmind/mmdbwriter - Apache License 2.0 or MIT License
+* github.com/oschwald/maxminddb-golang/v2 - ISC License
+* go4.org/netipx - BSD 3-Clause License
+* golang.org/x/sys - BSD 3-Clause License

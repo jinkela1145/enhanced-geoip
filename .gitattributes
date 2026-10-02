@@ -1,0 +1,3 @@
+* text=auto eol=lf
+*.mmdb binary
+*.gz binary

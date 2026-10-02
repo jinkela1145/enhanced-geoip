@@ -1,0 +1,7 @@
+# 已知地址抽查（用真实数据构建后运行 egeo verify）。只断言国家、距离上限和网络标记，每行都要写出处。
+# Known addresses checked by `egeo verify` on real builds. Only country, a distance limit and flags are asserted.
+ip,country,latitude,longitude,max_km,anycast,cdn,evidence
+1.1.1.1,,,,,true,,https://blog.cloudflare.com/cloudflare-1-1-1-1-incident-on-july-14-2025/
+8.8.8.8,,,,,true,,https://developers.google.com/speed/public-dns/faq
+9.9.9.9,,,,,true,,https://quad9.net/support/faq/
+2606:4700:4700::1111,,,,,true,,https://developers.cloudflare.com/1.1.1.1/ip-addresses/

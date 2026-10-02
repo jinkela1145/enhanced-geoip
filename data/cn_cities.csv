@@ -1,0 +1,2 @@
+# 中国大陆地级市（用于人工修正表里的城市名）。Generated with `egeo gen-cn-admin` from GeoNames (CC BY 4.0), reviewed by hand.
+province_iso,name_zh,name_en,geoname_id,latitude,longitude

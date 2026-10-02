@@ -1,0 +1,41 @@
+{
+  "name": "EnhancedGeo",
+  "repo": "jinkela1145/enhanced-geoip",
+  "description": {
+    "en": "IP geolocation merged from DB-IP Lite (CC BY 4.0), iptoasn.com (PDDL 1.0), GeoNames (CC BY 4.0) and public CDN / cloud network lists. IP Geolocation by DB-IP (https://db-ip.com). See SOURCES.md in the repository.",
+    "zh-CN": "合并自 DB-IP Lite（CC BY 4.0）、iptoasn.com（PDDL 1.0）、GeoNames（CC BY 4.0）以及 CDN / 云厂商公开网段的 IP 地理位置数据。IP Geolocation by DB-IP（https://db-ip.com）。数据来源见仓库中的 SOURCES.md。"
+  },
+  "radius_km": {
+    "city": 50,
+    "subdivision": 250,
+    "country": 1000,
+    "anycast": 1000
+  },
+  "lite": {
+    "coord_step": 0.5,
+    "radius_tiers_km": [10, 25, 50, 100, 250, 500, 1000],
+    "max_size_mb": 20
+  },
+  "release": {
+    "keep": 30,
+    "branch": "release",
+    "reports_branch": "ci-reports"
+  },
+  "disabled_sources": [],
+  "sources": {
+    "dbip_city": "https://download.db-ip.com/free/dbip-city-lite-{YYYY}-{MM}.mmdb.gz",
+    "dbip_asn": "https://download.db-ip.com/free/dbip-asn-lite-{YYYY}-{MM}.mmdb.gz",
+    "iptoasn": "https://iptoasn.com/data/ip2asn-combined.tsv.gz",
+    "cloudflare_v4": "https://www.cloudflare.com/ips-v4/",
+    "cloudflare_v6": "https://www.cloudflare.com/ips-v6/",
+    "fastly": "https://api.fastly.com/public-ip-list",
+    "aws": "https://ip-ranges.amazonaws.com/ip-ranges.json",
+    "gcp": "https://www.gstatic.com/ipranges/cloud.json",
+    "oracle": "https://docs.oracle.com/iaas/tools/public_ip_ranges.json",
+    "azure_page": "https://www.microsoft.com/en-us/download/details.aspx?id=56519",
+    "apnic_delegated": "https://ftp.apnic.net/stats/apnic/delegated-apnic-extended-latest",
+    "geonames_admin1": "https://download.geonames.org/export/dump/admin1CodesASCII.txt",
+    "geonames_cn": "https://download.geonames.org/export/dump/CN.zip",
+    "geonames_cn_altnames": "https://download.geonames.org/export/dump/alternatenames/CN.zip"
+  }
+}

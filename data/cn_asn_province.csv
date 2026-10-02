@@ -1,0 +1,5 @@
+# 省公司自己的 ASN → 省份。只收录在全球 BGP 路由表里用自己的 ASN 宣告网段的省级网络；
+# 全国骨干 ASN（如 AS4134、AS4837、AS9808）绝对不能放进来，否则会把整块网段落到总部所在地。
+# Provincial ASN -> province. Never list national backbones (e.g. AS4134, AS4837, AS9808).
+# Candidates come from reports/cn_asn_candidates.csv of a build (iptoasn AS_description, PDDL 1.0); every row needs evidence.
+asn,province_iso,as_name,evidence,note

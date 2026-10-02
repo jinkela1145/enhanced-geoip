@@ -1,0 +1,7 @@
+# 人工修正表 / Manual overrides. Highest priority layer. Data license: CC BY 4.0.
+# 每一行都必须写依据（链接或说明），不能抄自 GeoLite2、纯真、IPIP 等不允许使用的数据源，也不能来自 APNIC whois 查询结果。
+# Every row needs evidence (a link or an explanation). Never copy from GeoLite2, CZ88/QQWry, IPIP.net or APNIC whois.
+# network: CIDR or start-end. country_iso: ISO 3166-1 alpha-2 (HK / MO / TW are separate countries).
+# province / city: for CN use the Chinese names listed in cn_admin.csv / cn_cities.csv; elsewhere use English names.
+# latitude / longitude: optional for CN places listed in those tables, required otherwise. accuracy_km: optional.
+network,country_iso,province,city,latitude,longitude,accuracy_km,evidence

@@ -1,0 +1,10 @@
+# Build output and caches. Databases are published as GitHub Releases and on
+# the release branch only; never commit them to main.
+/.cache/
+/dist/
+/prev/
+/egeo
+*.mmdb
+*.mmdb.gz
+*.test
+*.prof

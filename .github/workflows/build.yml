@@ -1,0 +1,314 @@
+# Daily build of the databases.
+#
+# - Scheduled runs publish a release only when the repository variable
+#   PUBLISH_ENABLED is "true" (Settings -> Secrets and variables -> Actions ->
+#   Variables). Until then they are dry runs.
+# - Pushes to main and manual runs are dry runs unless "publish" is ticked.
+# - Every run that builds pushes its reports (no databases) to the ci-reports
+#   branch so maintainers can read them without downloading artifacts.
+name: build
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "data/**"
+      - "testdata/**"
+      - "config.json"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a GitHub Release (otherwise a dry run)"
+        type: boolean
+        default: false
+      force:
+        description: "Publish even if no upstream file changed"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+env:
+  GOFLAGS: -mod=readonly
+  GOMEMLIMIT: 12GiB
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    outputs:
+      publish: ${{ steps.mode.outputs.publish }}
+      changed: ${{ steps.changed.outputs.changed }}
+      built: ${{ steps.build.outcome == 'success' }}
+      version: ${{ steps.mode.outputs.version }}
+      warnings: ${{ steps.warnings.outputs.warnings }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Restore download cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache
+          key: upstream-${{ github.run_id }}
+          restore-keys: upstream-
+
+      - name: Decide mode
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          PUBLISH_ENABLED: ${{ vars.PUBLISH_ENABLED }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          publish=false
+          if [ "$EVENT" = "schedule" ] && [ "$PUBLISH_ENABLED" = "true" ]; then publish=true; fi
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$INPUT_PUBLISH" = "true" ]; then publish=true; fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "version=$(date -u +%Y.%m.%d)" >> "$GITHUB_OUTPUT"
+          mkdir -p dist/logs
+          echo "mode: publish=$publish event=$EVENT"
+
+      - name: Test
+        run: |
+          set -o pipefail
+          go vet ./... 2>&1 | tee dist/logs/vet.log
+          go test ./... 2>&1 | tee dist/logs/test.log
+
+      - name: Fetch upstream data
+        run: |
+          set -o pipefail
+          go run ./cmd/egeo fetch 2>&1 | tee dist/logs/fetch.log
+
+      - name: Download previous manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern manifest.json --dir prev 2>/dev/null \
+            || echo "no previous release"
+
+      - name: Check for changes
+        id: changed
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          changed=$(go run ./cmd/egeo changed)
+          if [ "$FORCE" = "true" ]; then changed=true; fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "changed=$changed"
+
+      - name: Build
+        id: build
+        if: steps.changed.outputs.changed == 'true' || steps.mode.outputs.publish != 'true'
+        env:
+          VERSION: ${{ steps.mode.outputs.version }}
+        run: |
+          set -o pipefail
+          timer=""
+          if [ -x /usr/bin/time ]; then timer="/usr/bin/time -v"; fi
+          $timer go run ./cmd/egeo build -version "$VERSION" 2>&1 | tee dist/logs/build.log
+
+      - name: Verify
+        if: steps.build.outcome == 'success'
+        run: |
+          set -o pipefail
+          go run ./cmd/egeo verify 2>&1 | tee dist/logs/verify.log
+          ls -l dist
+
+      - name: Generate China province / city candidates from GeoNames (dry runs only)
+        if: steps.mode.outputs.publish != 'true'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          go run ./cmd/egeo gen-cn-admin 2>&1 | tee dist/logs/gen-cn-admin.log
+
+      - name: Warnings
+        id: warnings
+        if: steps.build.outcome == 'success'
+        run: |
+          if [ -s dist/warnings.txt ]; then
+            echo "warnings=true" >> "$GITHUB_OUTPUT"
+            while read -r line; do echo "::warning::$line"; done < dist/warnings.txt
+          fi
+
+      - name: Upload build output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: |
+            dist/*.mmdb
+            dist/*.sha256
+            dist/manifest.json
+            dist/ACCURACY.md
+            dist/RELEASE_NOTES.md
+            dist/warnings.txt
+            dist/reports/
+            dist/logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  reports:
+    needs: build
+    if: always() && needs.build.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          name: dist
+          path: dist
+      - name: Push reports to the ci-reports branch
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          branch=$(jq -r '.release.reports_branch // "ci-reports"' config.json)
+          mkdir -p ../reports-out
+          cp -r dist/manifest.json dist/ACCURACY.md dist/warnings.txt dist/reports dist/logs ../reports-out/ 2>/dev/null || true
+          {
+            echo "# Build report"
+            echo
+            echo "- result: $BUILD_RESULT"
+            echo "- event: ${{ github.event_name }}"
+            echo "- commit: ${{ github.sha }}"
+            echo "- run: $RUN_URL"
+            echo "- time (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo '```'
+            ls -l dist 2>/dev/null || echo "no build output"
+            echo '```'
+          } > ../reports-out/RUN.md
+          git switch --orphan ci-reports-tmp
+          git rm -rf --quiet . 2>/dev/null || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r ../reports-out/. .
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "Reports for run ${{ github.run_id }} ($BUILD_RESULT)"
+          git push --force --quiet origin "HEAD:$branch"
+
+  publish:
+    needs: build
+    if: needs.build.outputs.publish == 'true' && needs.build.outputs.changed == 'true' && needs.build.outputs.built == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          tag="$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then tag="$VERSION.$(date -u +%H%M)"; fi
+          name=$(jq -r .name dist/manifest.json)
+          gh release create "$tag" dist/*.mmdb dist/*.sha256 dist/manifest.json dist/ACCURACY.md \
+            --title "$name $tag" --notes-file dist/RELEASE_NOTES.md --latest
+
+      - name: Keep only the newest releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          keep=$(jq -r .release.keep config.json)
+          gh release list --limit 300 --json tagName,createdAt \
+            --jq "sort_by(.createdAt) | reverse | .[$keep:] | .[].tagName" |
+          while read -r t; do
+            [ -n "$t" ] && gh release delete "$t" --cleanup-tag --yes
+          done
+
+      - name: Update the release branch (for jsDelivr)
+        run: |
+          branch=$(jq -r .release.branch config.json)
+          echo "RELEASE_BRANCH=$branch" >> "$GITHUB_ENV"
+          mkdir -p ../release-out
+          cp dist/*-City-Lite.mmdb dist/*-City-Lite.mmdb.sha256 dist/manifest.json ../release-out/
+          cp LICENSE NOTICE DATA_LICENSE.md SOURCES.md ../release-out/
+          for f in dist/*-City.mmdb; do
+            if [ "$(stat -c %s "$f")" -le 20000000 ]; then cp "$f" "$f.sha256" ../release-out/; fi
+          done
+          git switch --orphan release-tmp
+          git rm -rf --quiet . 2>/dev/null || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r ../release-out/. .
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "Release ${{ needs.build.outputs.version }}"
+          git push --force --quiet origin "HEAD:$branch"
+
+      - name: Purge jsDelivr cache
+        continue-on-error: true
+        run: |
+          for f in ../release-out/*; do
+            curl -fsS --max-time 30 "https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@${RELEASE_BRANCH}/$(basename "$f")" >/dev/null || true
+          done
+
+  notify:
+    needs: [build, publish]
+    if: always() && (github.event_name == 'schedule' || inputs.publish) && (contains(needs.*.result, 'failure') || needs.build.outputs.warnings == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update an issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED: ${{ contains(needs.*.result, 'failure') }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$FAILED" = "true" ]; then
+            label=build-failure; title="Automatic build failed"; color=B60205
+          else
+            label=build-warning; title="Automatic build finished with warnings"; color=FBCA04
+          fi
+          gh label create "$label" --repo "$GITHUB_REPOSITORY" --color "$color" --force >/dev/null
+          body="Run: $RUN_URL (event: ${{ github.event_name }}). Reports: https://github.com/${GITHUB_REPOSITORY}/tree/ci-reports"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label "$label" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label "$label" --body "$body"
+          fi
+
+  keepalive:
+    # GitHub disables scheduled workflows after 60 days without repository
+    # activity. Re-enabling through the API keeps the schedule alive without
+    # dummy commits.
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Re-enable this workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/build.yml/enable"

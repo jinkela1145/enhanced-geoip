@@ -1,0 +1,7 @@
+# 按 ASN 标记 / Flags applied to every range announced by these ASes (via iptoasn). Every row needs evidence.
+# 只有整个 AS 都是任播时才能写 anycast=true。Akamai 等 CDN 的边缘节点多数是单播，只标 cdn。
+# Use anycast=true only when the whole AS is anycast. Unicast CDNs such as Akamai only get cdn=true.
+asn,anycast,cdn,operator,evidence
+13335,false,true,Cloudflare,https://developers.cloudflare.com/fundamentals/concepts/how-cloudflare-works/ (anycast is set only for the published ips-v4 / ips-v6 lists; the AS also carries egress and customer ranges)
+54113,false,true,Fastly,"https://www.peeringdb.com/asn/54113 (Fastly, network type Content)"
+20940,false,true,Akamai,"https://www.peeringdb.com/asn/20940 (Akamai Technologies, network type Content)"
