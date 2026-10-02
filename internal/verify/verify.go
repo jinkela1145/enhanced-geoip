@@ -3,7 +3,10 @@
 package verify
 
 import (
+	"compress/gzip"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +21,7 @@ import (
 	"github.com/oschwald/maxminddb-golang/v2"
 
 	"github.com/jinkela1145/enhanced-geoip/internal/config"
+	"github.com/jinkela1145/enhanced-geoip/internal/geo"
 )
 
 // KnownIP is a row of testdata/known_ips.csv.
@@ -104,6 +108,7 @@ type Report struct {
 	FullNetworks int
 	LiteNetworks int
 	KnownChecked int
+	GzipChecked  bool
 	Failures     []string
 }
 
@@ -170,6 +175,13 @@ func Run(cfg *config.Config, dir, knownPath string) (*Report, error) {
 		return nil, err
 	}
 	defer lite.Close()
+	if cfg.Lite.Gzip {
+		if err := sameAsGunzipped(filepath.Join(dir, cfg.LiteFile()), filepath.Join(dir, cfg.LiteGzipFile())); err != nil {
+			rep.failf("%s: %v", cfg.LiteGzipFile(), err)
+		} else {
+			rep.GzipChecked = true
+		}
+	}
 
 	for _, c := range []struct {
 		r    *maxminddb.Reader
@@ -344,7 +356,7 @@ func checkKnown(rep *Report, full, lite *maxminddb.Reader, k KnownIP) {
 		if k.HasLoc {
 			if got.Location == nil {
 				rep.failf("known_ips line %d (%s): %s has no location", k.Line, k.IP, db.name)
-			} else if d := Haversine(k.Lat, k.Lon, got.Location.Latitude, got.Location.Longitude); d > k.MaxKM {
+			} else if d := geo.Haversine(k.Lat, k.Lon, got.Location.Latitude, got.Location.Longitude); d > k.MaxKM {
 				rep.failf("known_ips line %d (%s): %s location is %.0f km away, limit %.0f km", k.Line, k.IP, db.name, d, k.MaxKM)
 			}
 		}
@@ -357,12 +369,42 @@ func checkKnown(rep *Report, full, lite *maxminddb.Reader, k KnownIP) {
 	}
 }
 
-// Haversine returns the great-circle distance in kilometres.
-func Haversine(lat1, lon1, lat2, lon2 float64) float64 {
-	const r = 6371.0
-	rad := math.Pi / 180
-	dLat := (lat2 - lat1) * rad
-	dLon := (lon2 - lon1) * rad
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
-	return 2 * r * math.Asin(math.Min(1, math.Sqrt(a)))
+// sameAsGunzipped checks that the gzip file decompresses to exactly plain.
+func sameAsGunzipped(plain, gz string) error {
+	hash := func(r io.Reader) (string, error) {
+		h := sha256.New()
+		if _, err := io.Copy(h, r); err != nil {
+			return "", err
+		}
+		return hex.EncodeToString(h.Sum(nil)), nil
+	}
+	pf, err := os.Open(plain)
+	if err != nil {
+		return err
+	}
+	defer pf.Close()
+	want, err := hash(pf)
+	if err != nil {
+		return err
+	}
+	gf, err := os.Open(gz)
+	if err != nil {
+		return err
+	}
+	defer gf.Close()
+	zr, err := gzip.NewReader(gf)
+	if err != nil {
+		return err
+	}
+	got, err := hash(zr)
+	if err != nil {
+		return err
+	}
+	if err := zr.Close(); err != nil {
+		return err
+	}
+	if got != want {
+		return fmt.Errorf("decompresses to sha256 %s, but %s has %s", got, filepath.Base(plain), want)
+	}
+	return nil
 }

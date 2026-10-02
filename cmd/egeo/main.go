@@ -13,8 +13,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"os/signal"
+	"slices"
 	"time"
 
 	"github.com/jinkela1145/enhanced-geoip/internal/config"
@@ -109,8 +111,14 @@ func runBuild(cfg *config.Config, c common) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	for name, o := range m.Outputs {
-		log.Printf("%s: %s %.1f MB, %d ranges", name, o.File, float64(o.Size)/(1<<20), o.Ranges)
+	for _, name := range slices.Sorted(maps.Keys(m.Outputs)) {
+		o := m.Outputs[name]
+		log.Printf("%s: %s %.1f MB, %d ranges", name, o.File, float64(o.Size)/1e6, o.Ranges)
+	}
+	for _, fam := range slices.Sorted(maps.Keys(m.Stats.LiteAggregation)) {
+		st := m.Stats.LiteAggregation[fam]
+		log.Printf("lite %s: /%d blocks, %d -> %d ranges, %d blocks merged, %d split blocks kept, %.2f%% of addresses moved",
+			fam, st.PrefixLen, st.RunsBefore, st.RunsAfter, st.MergedBlocks, st.KeptBlocks, st.MovedPercent)
 	}
 	for _, w := range m.Warnings {
 		log.Printf("warning: %s", w)
@@ -120,7 +128,8 @@ func runBuild(cfg *config.Config, c common) {
 func runVerify(cfg *config.Config, c common) {
 	rep, err := verify.Run(cfg, c.out, c.known)
 	if rep != nil {
-		log.Printf("verified %d full networks, %d lite networks, %d known addresses", rep.FullNetworks, rep.LiteNetworks, rep.KnownChecked)
+		log.Printf("verified %d full networks, %d lite networks, %d known addresses, gzip copy checked: %v",
+			rep.FullNetworks, rep.LiteNetworks, rep.KnownChecked, rep.GzipChecked)
 	}
 	if err != nil {
 		log.Fatalf("verification failed:\n%v", err)

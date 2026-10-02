@@ -14,6 +14,9 @@
   "lite": {
     "coord_step": 0.5,
     "radius_tiers_km": [10, 25, 50, 100, 250, 500, 1000],
+    "min_prefix_v4": 24,
+    "min_prefix_v6": 40,
+    "gzip": true,
     "max_size_mb": 20
   },
   "release": {

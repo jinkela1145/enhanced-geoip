@@ -115,18 +115,60 @@ func accuracyMarkdown(m *Manifest) string {
 	b.WriteString("## 全库各层占比 / Layer shares of the whole database\n\n")
 	familyTable(&b, "IPv4", m.Stats.IPv4)
 	familyTable(&b, "IPv6", m.Stats.IPv6)
+	liteTable(&b, m.Stats.LiteAggregation)
 	b.WriteString("## 基准测试 / Benchmark\n\n第 3 阶段加入 / Coming in phase 3.\n")
 	return b.String()
 }
 
-func mb(size int64) string { return fmt.Sprintf("%.1f MB", float64(size)/(1<<20)) }
+func mb(size int64) string { return fmt.Sprintf("%.1f MB", float64(size)/1e6) }
+
+// liteBlocks describes the Lite aggregation for the release notes.
+func liteBlocks(cfg *config.Config) string {
+	v4, v6 := cfg.Lite.MinPrefixV4, cfg.Lite.MinPrefixV6
+	if v4 <= 0 && v6 <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("; locations aggregated to IPv4 /%d and IPv6 /%d blocks", v4, v6)
+}
+
+// liteTable reports what the Lite aggregation changed.
+func liteTable(b *strings.Builder, agg map[string]build.LiteAggStats) {
+	if len(agg) == 0 {
+		return
+	}
+	b.WriteString("## Lite 版的合并 / Lite aggregation\n\n")
+	b.WriteString("Lite 版把被切碎的小块合并成一个位置：取覆盖地址最多的那个，精度半径放大到能盖住这个块三分之二的地址。" +
+		"国家或网络类型不同的块、有空洞的块都原样保留。Full 版不做这种合并。\n" +
+		"The Lite edition gives each split block the location that covers most of it and widens the accuracy radius until it covers " +
+		"two thirds of the block. Blocks whose parts differ in country or network flags, or that have gaps, are left as they are. " +
+		"The full edition is not aggregated.\n\n")
+	b.WriteString("| 地址族 / Family | 块大小 / Block | 合并的块 / Merged blocks | 原样保留的碎块 / Split blocks kept | 位置变了的地址 / Addresses moved |\n|---|---|---|---|---|\n")
+	for _, fam := range []string{"ipv4", "ipv6"} {
+		st, ok := agg[fam]
+		if !ok {
+			continue
+		}
+		block := "—"
+		if st.PrefixLen > 0 {
+			block = fmt.Sprintf("/%d", st.PrefixLen)
+		}
+		name := map[string]string{"ipv4": "IPv4", "ipv6": "IPv6"}[fam]
+		fmt.Fprintf(b, "| %s | %s | %d | %d | %.2f%% |\n", name, block, st.MergedBlocks, st.KeptBlocks, st.MovedPercent)
+	}
+	b.WriteString("\n")
+}
 
 func releaseNotes(cfg *config.Config, m *Manifest) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n\n", m.Name, m.Version)
 	full, lite := m.Outputs["full"], m.Outputs["lite"]
 	fmt.Fprintf(&b, "- `%s` (%s): GeoLite2-City compatible structure + ASN + network flags\n", full.File, mb(full.Size))
-	fmt.Fprintf(&b, "- `%s` (%s): map edition (country, rounded coordinates, accuracy radius, network flags)\n\n", lite.File, mb(lite.Size))
+	fmt.Fprintf(&b, "- `%s` (%s): map edition (country, coordinates rounded to %g°, accuracy radius tiers, network flags%s)\n",
+		lite.File, mb(lite.Size), cfg.Lite.CoordStep, liteBlocks(cfg))
+	if gz, ok := m.Outputs["lite_gz"]; ok {
+		fmt.Fprintf(&b, "- `%s` (%s): the same Lite database, gzip-compressed, also served through jsDelivr\n", gz.File, mb(gz.Size))
+	}
+	b.WriteString("\n")
 	b.WriteString("Upstream versions:\n\n")
 	names := make([]string, 0, len(m.Sources))
 	for n := range m.Sources {

@@ -103,6 +103,9 @@ type Stats struct {
 	CNCoverageIPv4          CoverageReport `json:"cn_coverage_ipv4"`
 	CNCoverageIPv6          CoverageReport `json:"cn_coverage_ipv6"`
 	UnmatchedCNSubdivisions map[string]int `json:"unmatched_cn_subdivisions,omitempty"`
+	// LiteAggregation reports the Lite block aggregation per family
+	// ("ipv4", "ipv6").
+	LiteAggregation map[string]LiteAggStats `json:"lite_aggregation,omitempty"`
 }
 
 func unitOf(is4 bool) (string, float64) {

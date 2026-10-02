@@ -50,7 +50,15 @@ type Radius struct {
 type Lite struct {
 	CoordStep   float64  `json:"coord_step"`
 	RadiusTiers []uint16 `json:"radius_tiers_km"`
-	MaxSizeMB   int      `json:"max_size_mb"`
+	// MinPrefixV4 and MinPrefixV6 are the block sizes the Lite database is
+	// aggregated to (0 turns aggregation off for that family).
+	MinPrefixV4 int `json:"min_prefix_v4"`
+	MinPrefixV6 int `json:"min_prefix_v6"`
+	// Gzip also writes <Lite file>.gz.
+	Gzip bool `json:"gzip"`
+	// MaxSizeMB is the size limit of the file served through jsDelivr: the
+	// .gz copy when Gzip is set, otherwise the Lite database itself.
+	MaxSizeMB int `json:"max_size_mb"`
 }
 
 // Release holds publishing settings used by the workflow.
@@ -112,6 +120,12 @@ func (c *Config) Validate() error {
 	if len(c.Lite.RadiusTiers) == 0 || !slices.IsSorted(c.Lite.RadiusTiers) {
 		errs = append(errs, errors.New("lite.radius_tiers_km must be a non-empty ascending list"))
 	}
+	if c.Lite.MinPrefixV4 < 0 || c.Lite.MinPrefixV4 > 32 {
+		errs = append(errs, errors.New("lite.min_prefix_v4 must be in [0, 32]"))
+	}
+	if c.Lite.MinPrefixV6 < 0 || c.Lite.MinPrefixV6 > 128 {
+		errs = append(errs, errors.New("lite.min_prefix_v6 must be in [0, 128]"))
+	}
 	for _, s := range DailySources {
 		if c.Enabled(s) && c.Sources[s] == "" {
 			errs = append(errs, fmt.Errorf("sources.%s is missing", s))
@@ -142,6 +156,9 @@ func (c *Config) FullFile() string { return c.FullType() + ".mmdb" }
 
 // LiteFile is the file name of the Lite database.
 func (c *Config) LiteFile() string { return c.LiteType() + ".mmdb" }
+
+// LiteGzipFile is the file name of the gzip-compressed Lite database.
+func (c *Config) LiteGzipFile() string { return c.LiteFile() + ".gz" }
 
 // UserAgent identifies the builder to upstream servers.
 func (c *Config) UserAgent() string {

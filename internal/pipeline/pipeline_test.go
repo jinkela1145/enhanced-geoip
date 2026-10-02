@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -316,6 +319,81 @@ func TestEndToEnd(t *testing.T) {
 		t.Errorf("lite 3.112.0.1 network = %v (cloud_region must not be in Lite)", lrec["network"])
 	}
 
+	// Lite aggregation to /24 and /40 blocks; the full database keeps the detail.
+	liteCases := []struct {
+		ip       string
+		country  string
+		lat, lon float64
+		radius   uint64
+		missing  bool
+	}{
+		{ip: "5.1.2.1", country: "DE", lat: 52.5, lon: 13.5, radius: 50},
+		{ip: "5.1.2.130", country: "DE", lat: 52.5, lon: 13.5, radius: 50}, // Munich in the full database
+		{ip: "5.1.4.200", country: "FR", lat: 49, lon: 2.5, radius: 500},   // Paris + Lyon needed for 2/3
+		{ip: "5.1.3.1", country: "NL", lat: 52.5, lon: 5, radius: 50},      // mixed countries: kept
+		{ip: "5.1.3.129", country: "BE", lat: 51, lon: 4.5, radius: 50},
+		{ip: "5.1.5.1", country: "DE", lat: 52.5, lon: 13.5, radius: 50}, // gap: kept
+		{ip: "5.1.5.130", country: "DE", lat: 48, lon: 11.5, radius: 50},
+		{ip: "5.1.5.200", missing: true},
+		{ip: "223.3.0.1", country: "CN", lat: 22.5, lon: 114, radius: 50}, // CN and HK share a /24: never merged
+		{ip: "223.3.0.129", country: "HK", lat: 22.5, lon: 114, radius: 50},
+		{ip: "2a02:1:90::1", country: "DE", lat: 52.5, lon: 13.5, radius: 50}, // Hamburg in the full database
+	}
+	for _, c := range liteCases {
+		var got struct {
+			Country struct {
+				ISOCode string `maxminddb:"iso_code"`
+			} `maxminddb:"country"`
+			Location struct {
+				Latitude       float64 `maxminddb:"latitude"`
+				Longitude      float64 `maxminddb:"longitude"`
+				AccuracyRadius uint64  `maxminddb:"accuracy_radius"`
+			} `maxminddb:"location"`
+		}
+		found := lookup(t, lite, c.ip, &got)
+		if c.missing {
+			if found {
+				t.Errorf("lite %s should not be in the database", c.ip)
+			}
+			continue
+		}
+		if !found || got.Country.ISOCode != c.country || got.Location.Latitude != c.lat || got.Location.Longitude != c.lon || got.Location.AccuracyRadius != c.radius {
+			t.Errorf("lite %s = %+v, want %s %v,%v r%d", c.ip, got, c.country, c.lat, c.lon, c.radius)
+		}
+	}
+	for ip, city := range map[string]string{"5.1.2.130": "Munich", "2a02:1:90::1": "Hamburg", "5.1.4.200": "Marseille"} {
+		var got fullRec
+		if !lookup(t, full, ip, &got) || got.City.Names["en"] != city {
+			t.Errorf("full %s: city %q, want %q", ip, got.City.Names["en"], city)
+		}
+	}
+	if agg := m.Stats.LiteAggregation; agg["ipv4"].PrefixLen != 24 || agg["ipv4"].MergedBlocks != 2 || agg["ipv4"].KeptBlocks != 3 ||
+		agg["ipv6"].PrefixLen != 40 || agg["ipv6"].MergedBlocks != 1 || agg["ipv4"].MovedPercent <= 0 {
+		t.Errorf("lite aggregation stats: %+v", agg)
+	}
+
+	// The gzip copy decompresses to the Lite database.
+	gzOut, ok := m.Outputs["lite_gz"]
+	if !ok || gzOut.File != fx.cfg.LiteGzipFile() || gzOut.Compression != "gzip" || gzOut.DatabaseType != "EnhancedGeo-City-Lite" {
+		t.Fatalf("lite_gz output: %+v", gzOut)
+	}
+	gf, err := os.Open(filepath.Join(out, gzOut.File))
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := gzip.NewReader(gf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if zr.Header.Name != "" || !zr.Header.ModTime.IsZero() {
+		t.Errorf("gzip header must not carry a name or time: %+v", zr.Header)
+	}
+	plain, _ := io.ReadAll(zr)
+	gf.Close()
+	if h := sha256.Sum256(plain); hex.EncodeToString(h[:]) != m.Outputs["lite"].SHA256 {
+		t.Error("lite .gz does not decompress to the Lite database")
+	}
+
 	// verify package: structure + known addresses.
 	known := filepath.Join(t.TempDir(), "known.csv")
 	_ = os.WriteFile(known, []byte(strings.Join(verify.KnownHeader, ",")+"\n"+
@@ -324,7 +402,7 @@ func TestEndToEnd(t *testing.T) {
 		"39.0.0.1,CN,32.06,118.80,50,,,test\n"), 0o644)
 	if rep, err := verify.Run(fx.cfg, out, known); err != nil {
 		t.Fatalf("verify: %v", err)
-	} else if rep.KnownChecked != 3 || rep.FullNetworks == 0 || rep.LiteNetworks == 0 {
+	} else if rep.KnownChecked != 3 || rep.FullNetworks == 0 || rep.LiteNetworks == 0 || !rep.GzipChecked {
 		t.Errorf("verify report %+v", rep)
 	}
 	badKnown := filepath.Join(t.TempDir(), "bad.csv")
@@ -339,7 +417,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Errorf("coverage: %+v", cov)
 	}
 	for _, f := range []string{"manifest.json", "ACCURACY.md", "RELEASE_NOTES.md", "reports/cn_asn_candidates.csv",
-		fx.cfg.FullFile() + ".sha256", fx.cfg.LiteFile() + ".sha256"} {
+		fx.cfg.FullFile() + ".sha256", fx.cfg.LiteFile() + ".sha256", fx.cfg.LiteGzipFile() + ".sha256"} {
 		if _, err := os.Stat(filepath.Join(out, f)); err != nil {
 			t.Errorf("missing %s", f)
 		}
@@ -356,7 +434,8 @@ func TestEndToEnd(t *testing.T) {
 	// Reproducible: same inputs give byte-identical databases.
 	out2 := t.TempDir()
 	m2 := fx.run(out2)
-	if m2.Outputs["full"].SHA256 != m.Outputs["full"].SHA256 || m2.Outputs["lite"].SHA256 != m.Outputs["lite"].SHA256 {
+	if m2.Outputs["full"].SHA256 != m.Outputs["full"].SHA256 || m2.Outputs["lite"].SHA256 != m.Outputs["lite"].SHA256 ||
+		m2.Outputs["lite_gz"].SHA256 != m.Outputs["lite_gz"].SHA256 {
 		t.Error("builds are not reproducible")
 	}
 

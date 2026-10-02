@@ -51,13 +51,17 @@ type Output struct {
 	SHA256       string `json:"sha256"`
 	RecordSize   int    `json:"record_size"`
 	Ranges       int    `json:"ranges"`
+	// Compression is set on compressed copies ("gzip"); the other fields
+	// then describe the database inside.
+	Compression string `json:"compression,omitempty"`
 }
 
 // Result of a build.
 type Result struct {
-	Full  Output `json:"full"`
-	Lite  Output `json:"lite"`
-	Stats Stats  `json:"stats"`
+	Full     Output  `json:"full"`
+	Lite     Output  `json:"lite"`
+	LiteGzip *Output `json:"lite_gz,omitempty"`
+	Stats    Stats   `json:"stats"`
 }
 
 type family struct {
@@ -181,25 +185,30 @@ func Build(in *Inputs, opt Options) (*Result, error) {
 
 	// Pass 2: Lite database.
 	opt.Logf("building %s", cfg.LiteFile())
-	type liteRun struct {
-		start, end netip.Addr
-		k          liteKey
-	}
-	var runs []liteRun
 	step, tiers := cfg.Lite.CoordStep, cfg.Lite.RadiusTiers
 	lc := newValueCache()
+	var runs []liteRun
+	res.Stats.LiteAggregation = map[string]LiteAggStats{}
 	for _, f := range fams {
+		var fr []liteRun
 		iprange.Refine(f.base, []iprange.Spans{f.asn, f.flags, f.over},
 			func(s, e netip.Addr, bi int, li []int) {
 				k, _ := r.keyFor(f.base[bi].Val, idx(f.asn, li[0]), idx(f.flags, li[1]), idx(f.over, li[2]))
 				rv := r.resolve(k)
 				lk := lc.liteKeyOf(&rv, step, tiers)
-				if n := len(runs); n > 0 && runs[n-1].k == lk && runs[n-1].end.Next() == s {
-					runs[n-1].end = e
+				if n := len(fr); n > 0 && fr[n-1].k == lk && fr[n-1].end.Next() == s {
+					fr[n-1].end = e
 					return
 				}
-				runs = append(runs, liteRun{s, e, lk})
+				fr = append(fr, liteRun{s, e, lk})
 			})
+		bits, name := cfg.Lite.MinPrefixV6, "ipv6"
+		if f.is4 {
+			bits, name = cfg.Lite.MinPrefixV4, "ipv4"
+		}
+		fr, st := aggregateLite(fr, bits, step, tiers)
+		res.Stats.LiteAggregation[name] = st
+		runs = append(runs, fr...)
 	}
 	liteDesc := map[string]string{}
 	for k, v := range cfg.Description {
@@ -208,6 +217,12 @@ func Build(in *Inputs, opt Options) (*Result, error) {
 	liteDesc["en"] += fmt.Sprintf(" Lite edition: country, coordinates rounded to %g°, accuracy radius tiers and network flags only.", step)
 	if _, ok := liteDesc["zh-CN"]; ok {
 		liteDesc["zh-CN"] += fmt.Sprintf(" 精简版：只含国家、取整到 %g° 的坐标、分档的精度半径和网络类型标记。", step)
+	}
+	if v4, v6 := cfg.Lite.MinPrefixV4, cfg.Lite.MinPrefixV6; v4 > 0 || v6 > 0 {
+		liteDesc["en"] += fmt.Sprintf(" Locations are aggregated to IPv4 %s and IPv6 %s blocks; countries and network flags are never merged.", prefixText(v4), prefixText(v6))
+		if _, ok := liteDesc["zh-CN"]; ok {
+			liteDesc["zh-CN"] += fmt.Sprintf(" 位置按 IPv4 %s、IPv6 %s 的块合并，国家和网络类型标记不会被合并。", prefixText(v4), prefixText(v6))
+		}
 	}
 	var lastErr error
 	for _, rs := range []int{24, 28, 32} {
@@ -236,7 +251,23 @@ func Build(in *Inputs, opt Options) (*Result, error) {
 	if lastErr != nil {
 		return nil, lastErr
 	}
+	if cfg.Lite.Gzip {
+		gz, err := gzipFile(filepath.Join(opt.OutDir, cfg.LiteFile()), filepath.Join(opt.OutDir, cfg.LiteGzipFile()))
+		if err != nil {
+			return nil, fmt.Errorf("lite gzip: %w", err)
+		}
+		gz.DatabaseType, gz.RecordSize, gz.Ranges, gz.Compression = res.Lite.DatabaseType, res.Lite.RecordSize, res.Lite.Ranges, "gzip"
+		res.LiteGzip = &gz
+	}
 	return res, nil
+}
+
+// prefixText formats a block size for the description.
+func prefixText(bits int) string {
+	if bits <= 0 {
+		return "unaggregated"
+	}
+	return fmt.Sprintf("/%d", bits)
 }
 
 func (r *resolver) flattenFlags(all []sources.FlagEntry, is4 bool) []iprange.Seg[int32] {

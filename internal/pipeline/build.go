@@ -193,7 +193,11 @@ func Build(opt BuildOptions) (*Manifest, error) {
 		return nil, err
 	}
 	m := newManifest(opt, l, res)
-	for _, o := range []build.Output{res.Full, res.Lite} {
+	outs := []build.Output{res.Full, res.Lite}
+	if res.LiteGzip != nil {
+		outs = append(outs, *res.LiteGzip)
+	}
+	for _, o := range outs {
 		line := fmt.Sprintf("%s  %s\n", o.SHA256, o.File)
 		if err := os.WriteFile(filepath.Join(opt.OutDir, o.File+".sha256"), []byte(line), 0o644); err != nil {
 			return nil, err
@@ -265,9 +269,16 @@ func newManifest(opt BuildOptions, l *Loaded, res *build.Result) *Manifest {
 	for name, meta := range opt.Inputs.Sources {
 		m.Sources[name] = sourceInfo(meta, l.Versions[name])
 	}
-	if lim := int64(opt.Config.Lite.MaxSizeMB) << 20; lim > 0 && res.Lite.Size > lim {
-		m.Warnings = append(m.Warnings, fmt.Sprintf("%s is %.1f MB, above the %d MB target (jsDelivr only serves files up to 20 MB)",
-			res.Lite.File, float64(res.Lite.Size)/(1<<20), opt.Config.Lite.MaxSizeMB))
+	// jsDelivr serves the .gz copy when there is one, otherwise the Lite
+	// database itself.
+	served := res.Lite
+	if res.LiteGzip != nil {
+		m.Outputs["lite_gz"] = *res.LiteGzip
+		served = *res.LiteGzip
+	}
+	if lim := int64(opt.Config.Lite.MaxSizeMB) * 1_000_000; lim > 0 && served.Size > lim {
+		m.Warnings = append(m.Warnings, fmt.Sprintf("%s is %s, above the %d MB jsDelivr limit, so it is left off the %s branch",
+			served.File, mb(served.Size), opt.Config.Lite.MaxSizeMB, opt.Config.Release.Branch))
 	}
 	return m
 }

@@ -154,6 +154,7 @@ jobs:
           name: dist
           path: |
             dist/*.mmdb
+            dist/*.mmdb.gz
             dist/*.sha256
             dist/manifest.json
             dist/ACCURACY.md
@@ -227,10 +228,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
+          shopt -s nullglob
           tag="$VERSION"
           if gh release view "$tag" >/dev/null 2>&1; then tag="$VERSION.$(date -u +%H%M)"; fi
           name=$(jq -r .name dist/manifest.json)
-          gh release create "$tag" dist/*.mmdb dist/*.sha256 dist/manifest.json dist/ACCURACY.md \
+          gh release create "$tag" dist/*.mmdb dist/*.mmdb.gz dist/*.sha256 dist/manifest.json dist/ACCURACY.md \
             --title "$name $tag" --notes-file dist/RELEASE_NOTES.md --latest
 
       - name: Keep only the newest releases
@@ -248,11 +250,14 @@ jobs:
         run: |
           branch=$(jq -r .release.branch config.json)
           echo "RELEASE_BRANCH=$branch" >> "$GITHUB_ENV"
+          # jsDelivr only serves files up to this size; larger databases stay
+          # on the Releases page.
+          limit=$(( $(jq -r .lite.max_size_mb config.json) * 1000000 ))
           mkdir -p ../release-out
-          cp dist/*-City-Lite.mmdb dist/*-City-Lite.mmdb.sha256 dist/manifest.json ../release-out/
-          cp LICENSE NOTICE DATA_LICENSE.md SOURCES.md ../release-out/
-          for f in dist/*-City.mmdb; do
-            if [ "$(stat -c %s "$f")" -le 20000000 ]; then cp "$f" "$f.sha256" ../release-out/; fi
+          cp dist/manifest.json LICENSE NOTICE DATA_LICENSE.md SOURCES.md ../release-out/
+          for f in dist/*.mmdb dist/*.mmdb.gz; do
+            [ -f "$f" ] || continue
+            if [ "$(stat -c %s "$f")" -le "$limit" ]; then cp "$f" "$f.sha256" ../release-out/; fi
           done
           git switch --orphan release-tmp
           git rm -rf --quiet . 2>/dev/null || true

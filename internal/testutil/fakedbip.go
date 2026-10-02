@@ -49,6 +49,22 @@ var DefaultFakeNets = []FakeNet{
 	{CIDR: "2400:cb00::/32", Country: "US", Subdivision: "California", City: "San Francisco", Lat: 37.77, Lon: -122.42},
 	{CIDR: "2a00:1450::/32", Country: "IE", Subdivision: "Leinster", City: "Dublin", Lat: 53.35, Lon: -6.26},
 	{CIDR: "2001:1::/32", Country: "US", City: "Reserved"},
+	// Blocks split below /24 and /40 exercise the Lite aggregation.
+	{CIDR: "5.1.2.0/25", Country: "DE", Subdivision: "Berlin", City: "Berlin", Lat: 52.52, Lon: 13.40},
+	{CIDR: "5.1.2.128/26", Country: "DE", Subdivision: "Bavaria", City: "Munich", Lat: 48.14, Lon: 11.58},
+	{CIDR: "5.1.2.192/26", Country: "DE", Subdivision: "Berlin", City: "Berlin", Lat: 52.52, Lon: 13.40},
+	{CIDR: "5.1.3.0/25", Country: "NL", Subdivision: "North Holland", City: "Amsterdam", Lat: 52.37, Lon: 4.90},
+	{CIDR: "5.1.3.128/25", Country: "BE", Subdivision: "Brussels Capital", City: "Brussels", Lat: 50.85, Lon: 4.35},
+	{CIDR: "5.1.4.0/25", Country: "FR", Subdivision: "Ile-de-France", City: "Paris", Lat: 48.86, Lon: 2.35},
+	{CIDR: "5.1.4.128/26", Country: "FR", Subdivision: "Auvergne-Rhone-Alpes", City: "Lyon", Lat: 45.76, Lon: 4.84},
+	{CIDR: "5.1.4.192/26", Country: "FR", Subdivision: "Provence-Alpes-Cote d'Azur", City: "Marseille", Lat: 43.30, Lon: 5.37},
+	{CIDR: "5.1.5.0/25", Country: "DE", Subdivision: "Berlin", City: "Berlin", Lat: 52.52, Lon: 13.40},
+	{CIDR: "5.1.5.128/26", Country: "DE", Subdivision: "Bavaria", City: "Munich", Lat: 48.14, Lon: 11.58},
+	{CIDR: "223.3.0.0/25", Country: "CN", Subdivision: "Guangdong", City: "Shenzhen", Lat: 22.55, Lon: 114.07},
+	{CIDR: "223.3.0.128/25", Country: "HK", Subdivision: "Central and Western", City: "Hong Kong", Lat: 22.28, Lon: 114.16},
+	{CIDR: "2a02:1::/41", Country: "DE", Subdivision: "Berlin", City: "Berlin", Lat: 52.52, Lon: 13.40},
+	{CIDR: "2a02:1:80::/42", Country: "DE", Subdivision: "Hamburg", City: "Hamburg", Lat: 53.55, Lon: 9.99},
+	{CIDR: "2a02:1:c0::/42", Country: "DE", Subdivision: "Berlin", City: "Berlin", Lat: 52.52, Lon: 13.40},
 }
 
 var countryInfo = map[string][4]string{
@@ -61,6 +77,10 @@ var countryInfo = map[string][4]string{
 	"TW": {"AS", "Asia", "Taiwan", "台湾"},
 	"MO": {"AS", "Asia", "Macao", "澳门"},
 	"IE": {"EU", "Europe", "Ireland", "爱尔兰"},
+	"DE": {"EU", "Europe", "Germany", "德国"},
+	"FR": {"EU", "Europe", "France", "法国"},
+	"NL": {"EU", "Europe", "Netherlands", "荷兰"},
+	"BE": {"EU", "Europe", "Belgium", "比利时"},
 }
 
 // WriteFakeDBIP writes a gzip-compressed MMDB that looks like DB-IP City Lite.
@@ -87,7 +107,7 @@ func WriteFakeDBIP(path string, nets []FakeNet) error {
 			"country": mmdbtype.Map{
 				"geoname_id":           mmdbtype.Uint32(1000 + uint32(n.Country[0])*100 + uint32(n.Country[1])),
 				"iso_code":             mmdbtype.String(n.Country),
-				"is_in_european_union": mmdbtype.Bool(n.Country == "IE"),
+				"is_in_european_union": mmdbtype.Bool(info[0] == "EU"),
 				"names":                mmdbtype.Map{"en": mmdbtype.String(info[2]), "zh-CN": mmdbtype.String(info[3])},
 			},
 		}

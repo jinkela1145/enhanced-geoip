@@ -11,15 +11,17 @@ An open-source IP geolocation database that is safe to redistribute, rebuilt dai
 | File | Content |
 |---|---|
 | `EnhancedGeo-City.mmdb` | Full edition: GeoLite2-City compatible structure plus ASN and network flags |
-| `EnhancedGeo-City-Lite.mmdb` | Map edition: country, rounded coordinates, accuracy radius and network flags (target ≤ 20 MB) |
+| `EnhancedGeo-City-Lite.mmdb` | Map edition: country, rounded coordinates, accuracy radius and network flags |
+| `EnhancedGeo-City-Lite.mmdb.gz` | The Lite edition, gzip-compressed; identical after decompression |
 
 Stable URLs (available after the first release):
 
 - `https://github.com/jinkela1145/enhanced-geoip/releases/latest/download/EnhancedGeo-City.mmdb`
 - `https://github.com/jinkela1145/enhanced-geoip/releases/latest/download/EnhancedGeo-City-Lite.mmdb`
-- jsDelivr (Lite only): `https://cdn.jsdelivr.net/gh/jinkela1145/enhanced-geoip@release/EnhancedGeo-City-Lite.mmdb`
+- `https://github.com/jinkela1145/enhanced-geoip/releases/latest/download/EnhancedGeo-City-Lite.mmdb.gz`
+- jsDelivr: `https://cdn.jsdelivr.net/gh/jinkela1145/enhanced-geoip@release/EnhancedGeo-City-Lite.mmdb.gz`
 
-Every database comes with a `.sha256` file. `manifest.json` records the version and hash of every upstream file and per-layer statistics; `ACCURACY.md` reports coverage of the address space delegated to China.
+jsDelivr only serves files up to 20 MB, so the CDN URL carries the compressed Lite edition; get the full edition and the uncompressed Lite edition from Releases. Every file comes with a `.sha256` file. `manifest.json` records the version and hash of every upstream file and per-layer statistics; `ACCURACY.md` reports coverage of the address space delegated to China.
 
 ## Sources and merge order
 
@@ -69,6 +71,10 @@ Designed for world maps; **the fields are stable**:
 ```
 
 Coordinates are rounded to 0.5° (configurable), radii use the tiers 10 / 25 / 50 / 100 / 250 / 500 / 1000 km, false or empty `network` keys are omitted, and there are no names, ASNs or `cloud_region`. `cloud` codes: `aws`, `gcp`, `azure`, `oracle`.
+
+Locations are aggregated to IPv4 /24 and IPv6 /40 blocks: when a block is split between several locations it gets the location that covers most of its addresses, and `accuracy_radius` is widened until it covers two thirds of the block (MaxMind defines the radius at 67 % confidence). Blocks whose parts differ in country or network flags, or that have gaps, are left as they are, so countries and network flags are exactly those of the full edition and Hong Kong, Macao and Taiwan are never merged into CN. Use the full edition when you need locations finer than /24 or /40. `ACCURACY.md` reports how much was merged in each build.
+
+The `.gz` file can be opened in memory with the standard library: `gzip.NewReader`, `io.ReadAll`, then `maxminddb.OpenBytes(data)`.
 
 ## Reading the databases
 
