@@ -1,0 +1,31 @@
+08:06:37 egeo: building EnhancedGeo-City.mmdb
+08:07:45 egeo: building EnhancedGeo-City-Lite.mmdb
+08:08:05 egeo: full: EnhancedGeo-City.mmdb 176.8 MB, 7914101 ranges
+08:08:05 egeo: lite: EnhancedGeo-City-Lite.mmdb 29.2 MB, 3337823 ranges
+08:08:05 egeo: lite_gz: EnhancedGeo-City-Lite.mmdb.gz 16.2 MB, 3337823 ranges
+08:08:05 egeo: lite ipv4: /24 blocks, 2719250 -> 2655195 ranges, 226125 blocks merged, 15267 split blocks kept, 0.30% of addresses moved
+08:08:05 egeo: lite ipv6: /40 blocks, 3151790 -> 682628 ranges, 271949 blocks merged, 15953 split blocks kept, 0.00% of addresses moved
+08:08:05 egeo: build done in 1m41s
+	Command being timed: "go run ./cmd/egeo build -version 2026.10.03"
+	User time (seconds): 139.07
+	System time (seconds): 1.64
+	Percent of CPU this job got: 138%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:41.51
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 7248860
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 107438
+	Voluntary context switches: 36717
+	Involuntary context switches: 9282
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 682304
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

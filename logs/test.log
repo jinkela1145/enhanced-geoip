@@ -1,0 +1,10 @@
+?   	github.com/jinkela1145/enhanced-geoip/cmd/egeo	[no test files]
+ok  	github.com/jinkela1145/enhanced-geoip/internal/build	0.597s
+?   	github.com/jinkela1145/enhanced-geoip/internal/config	[no test files]
+ok  	github.com/jinkela1145/enhanced-geoip/internal/fetch	(cached)
+ok  	github.com/jinkela1145/enhanced-geoip/internal/geo	0.002s
+ok  	github.com/jinkela1145/enhanced-geoip/internal/iprange	(cached)
+ok  	github.com/jinkela1145/enhanced-geoip/internal/pipeline	0.524s
+ok  	github.com/jinkela1145/enhanced-geoip/internal/sources	0.011s
+?   	github.com/jinkela1145/enhanced-geoip/internal/testutil	[no test files]
+?   	github.com/jinkela1145/enhanced-geoip/internal/verify	[no test files]
